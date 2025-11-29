@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Konsolidowany analizator arbitrażu walutowego dla Eclesiar.
-Łączy najlepsze funkcje z obu wersji.
+Consolidated currency arbitrage analyzer for Eclesiar.
+Combines the best features from both versions.
 """
 
 from datetime import datetime, timedelta
@@ -24,11 +24,11 @@ from src.core.services.economy_service import fetch_countries_and_currencies, bu
 
 @dataclass
 class MarketOffer:
-    """Reprezentuje ofertę na rynku walutowym"""
+    """Represents an offer in the currency market"""
     rate: float
     amount: float
     owner_id: int
-    transaction_type: str  # 'BUY' lub 'SELL'
+    transaction_type: str  # 'BUY' or 'SELL'
     timestamp: datetime
 
 
@@ -44,12 +44,13 @@ class CurrencyMarket:
     best_sell_rate: float
     spread: float
     volume_24h: float
+    liquidity_score: float
     last_updated: datetime
 
 
 @dataclass
 class ArbitrageOpportunity:
-    """Reprezentuje okazję do arbitrażu"""
+    """Represents an arbitrage opportunity"""
     from_currency: str
     to_currency: str
     buy_rate: float
@@ -64,7 +65,7 @@ class ArbitrageOpportunity:
 
 @dataclass
 class PortfolioPosition:
-    """Reprezentuje pozycję w portfelu"""
+    """Represents a portfolio position"""
     currency_name: str
     amount: float
     avg_buy_rate: float
@@ -102,7 +103,7 @@ class RiskAnalyzer:
         }
     
     def calculate_risk_score(self, opportunity: ArbitrageOpportunity) -> float:
-        """Oblicza score ryzyka dla okazji arbitrażowej"""
+        """Calculates risk score for arbitrage opportunity"""
         try:
             risk_score = 0.0
             
@@ -144,7 +145,7 @@ class RiskAnalyzer:
             return min(1.0, risk_score)
             
         except Exception as e:
-            print(f"Błąd podczas obliczania score ryzyka: {e}")
+            print(f"Error calculating risk score: {e}")
             return 1.0  # Maximum risk on error
 
 
@@ -251,27 +252,64 @@ class CurrencyArbitrageAnalyzer:
                 best_sell_rate=best_sell_rate,
                 spread=spread,
                 volume_24h=volume_24h,
+                liquidity_score=liquidity_score,
                 last_updated=datetime.now()
             )
             
         except Exception as e:
-            print(f"Błąd podczas pobierania danych rynkowych dla {currency_name}: {e}")
+            print(f"Error fetching market data for {currency_name}: {e}")
             return None
     
-    def find_arbitrage_opportunities(self) -> List[ArbitrageOpportunity]:
-        """Znajduje okazje do arbitrażu między wszystkimi walutami"""
+    def find_arbitrage_opportunities(self, use_database: bool = True) -> List[ArbitrageOpportunity]:
+        """Znajduje okazje do arbitrażu między wszystkimi walutami (DB-first approach)"""
         try:
             opportunities = []
             
-            # Pobierz dane o krajach i walutach
-            self.eco_countries, self.currencies_map, self.currency_codes_map, self.gold_id = fetch_countries_and_currencies()
+            if use_database:
+                # Spróbuj załadować dane z bazy danych
+                try:
+                    from src.core.services.database_manager_service import DatabaseManagerService
+                    db_manager = DatabaseManagerService()
+                    
+                    # Pobierz dane z bazy
+                    countries = db_manager.get_countries_data()
+                    self.currencies_map = db_manager.get_currencies_data()
+                    self.currency_rates = db_manager.get_currency_rates()
+                    
+                    # Konwertuj kraje do formatu oczekiwanego
+                    self.eco_countries = [
+                        {
+                            'country_id': c['country_id'],
+                            'country_name': c['country_name'],
+                            'currency_id': c['currency_id']
+                        }
+                        for c in countries
+                    ]
+                    
+                    # Znajdź GOLD ID
+                    self.gold_id = GOLD_ID_FALLBACK
+                    for curr_id, curr_name in self.currencies_map.items():
+                        if curr_name.upper() == 'GOLD':
+                            self.gold_id = curr_id
+                            break
+                    
+                    print(f"✅ Loaded data from database: {len(self.currencies_map)} currencies, {len(self.currency_rates)} rates")
+                    
+                except Exception as e:
+                    print(f"⚠️ Error loading from database: {e}")
+                    print("🔄 Falling back to API...")
+                    use_database = False
             
-            if not self.eco_countries or not self.currencies_map:
-                print("Błąd: Nie można pobrać danych o krajach i walutach")
-                return []
-            
-            # Pobierz kursy walut
-            self.currency_rates = build_currency_rates_map(self.currencies_map, self.gold_id)
+            if not use_database:
+                # Fallback: Pobierz dane z API
+                self.eco_countries, self.currencies_map, self.currency_codes_map, self.gold_id = fetch_countries_and_currencies()
+                
+                if not self.eco_countries or not self.currencies_map:
+                    print("Error: Cannot fetch countries and currencies data")
+                    return []
+                
+                # Pobierz kursy walut
+                self.currency_rates = build_currency_rates_map(self.currencies_map, self.gold_id)
             
             # Pobierz dane rynkowe dla wszystkich walut
             currency_ids = list(self.currencies_map.keys())
@@ -292,9 +330,9 @@ class CurrencyArbitrageAnalyzer:
                         if market:
                             markets[currency_id] = market
                     except Exception as e:
-                        print(f"Błąd podczas pobierania danych dla waluty {currency_id}: {e}")
+                        print(f"Error fetching data for currency {currency_id}: {e}")
             
-            print(f"Pobrano dane rynkowe dla {len(markets)} walut")
+            print(f"Fetched market data for {len(markets)} currencies")
             
             # Znajdź okazje arbitrażowe
             for from_currency_id, from_market in markets.items():
@@ -352,7 +390,7 @@ class CurrencyArbitrageAnalyzer:
             return opportunities
             
         except Exception as e:
-            print(f"Błąd podczas wyszukiwania okazji arbitrażowych: {e}")
+            print(f"Error searching for arbitrage opportunities: {e}")
             return []
     
     def generate_arbitrage_report(self, opportunities: List[ArbitrageOpportunity], 
@@ -404,7 +442,7 @@ class CurrencyArbitrageAnalyzer:
                     })
                     
         except Exception as e:
-            print(f"Błąd podczas zapisywania raportu CSV: {e}")
+            print(f"Error saving CSV report: {e}")
     
     def _save_txt_report(self, opportunities: List[ArbitrageOpportunity], filename: str):
         """Zapisuje raport w formacie TXT"""
@@ -426,18 +464,18 @@ class CurrencyArbitrageAnalyzer:
                     f.write("-" * 40 + "\n")
                     
         except Exception as e:
-            print(f"Błąd podczas zapisywania raportu TXT: {e}")
+            print(f"Error saving TXT report: {e}")
 
 
 def main():
     """Główna funkcja do testowania"""
     analyzer = CurrencyArbitrageAnalyzer(min_profit_threshold=0.5)
     
-    print("🔍 Wyszukiwanie okazji arbitrażowych...")
+    print("🔍 Searching for arbitrage opportunities...")
     opportunities = analyzer.find_arbitrage_opportunities()
     
     if opportunities:
-        print(f"✅ Znaleziono {len(opportunities)} okazji arbitrażowych")
+        print(f"✅ Found {len(opportunities)} arbitrage opportunities")
         
         # Generuj raporty
         csv_result = analyzer.generate_arbitrage_report(opportunities, "csv")
@@ -447,7 +485,7 @@ def main():
         print(f"📄 {txt_result}")
         
         # Pokaż top 5 okazji
-        print("\n🏆 TOP 5 OKAZJI ARBITRAŻOWYCH:")
+        print("\n🏆 TOP 5 ARBITRAGE OPPORTUNITIES:")
         print("-" * 60)
         for i, opp in enumerate(opportunities[:5], 1):
             print(f"{i}. {opp.from_currency} → {opp.to_currency}")
@@ -455,7 +493,7 @@ def main():
             print(f"   Szacowany zysk: {opp.estimated_profit_gold:.6f} GOLD")
             print()
     else:
-        print("❌ Nie znaleziono okazji arbitrażowych spełniających kryteria.")
+        print("❌ No arbitrage opportunities found meeting the criteria.")
 
 
 if __name__ == "__main__":

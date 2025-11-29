@@ -112,7 +112,7 @@ def init_db() -> None:
             """
         )
         
-        # Migracja: dodaj kolumnę bonus_by_type jeśli nie istnieje
+        # Migration: add bonus_by_type column if it doesn't exist
         try:
             cur.execute("ALTER TABLE regions_data ADD COLUMN bonus_by_type TEXT DEFAULT '{}'")
             print("Added bonus_by_type column to regions_data table")
@@ -121,6 +121,44 @@ def init_db() -> None:
                 print("bonus_by_type column already exists")
             else:
                 print(f"Error adding bonus_by_type column: {e}")
+        
+        # Add new tables for repository system
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS countries (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                currency_id INTEGER NOT NULL,
+                currency_name TEXT NOT NULL,
+                is_available BOOLEAN DEFAULT 1
+            )
+            """
+        )
+        
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS currencies (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                code TEXT NOT NULL,
+                gold_rate REAL DEFAULT 0.0
+            )
+            """
+        )
+        
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS regions (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                country_id INTEGER NOT NULL,
+                country_name TEXT NOT NULL,
+                pollution REAL DEFAULT 0.0,
+                bonus_score INTEGER DEFAULT 0,
+                population INTEGER DEFAULT 0
+            )
+            """
+        )
         
         conn.commit()
 
@@ -180,11 +218,11 @@ def save_item_prices_from_cheapest(cheapest_by_item: Dict[Any, List[Dict[str, An
         # Save top offer (cheapest)
         e = entries[0]
         country_id = e.get("country_id")
-        country_name = e.get("country_name")
+        country_name = e.get("country_name") or e.get("country")
         currency_id = e.get("currency_id")
         currency_name = e.get("currency_name")
-        price_original = e.get("price_in_currency")
-        price_gold = e.get("price_in_gold")
+        price_original = e.get("price_in_currency") or e.get("price_currency")
+        price_gold = e.get("price_in_gold") or e.get("price_gold")
         try:
             price_original_f = float(price_original) if price_original is not None else None
         except Exception:
@@ -324,14 +362,14 @@ def load_raw_cache() -> Optional[Dict[str, Any]]:
 
 def load_regions_data() -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """
-    Ładuje dane o regionach z bazy danych.
+    Loads region data from the database.
     
     Returns:
-        Krotka (lista regionów, podsumowanie)
+        Tuple (list of regions, summary)
     """
     try:
         with _connect() as conn:
-            # Pobierz najnowsze podsumowanie
+            # Get the latest summary
             cursor = conn.execute(
                 """
                 SELECT summary_json FROM regions_summary 
@@ -341,7 +379,7 @@ def load_regions_data() -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
             summary_row = cursor.fetchone()
             summary = json.loads(summary_row[0]) if summary_row else {}
             
-            # Pobierz najnowsze dane regionów
+            # Get the latest region data
             cursor = conn.execute(
                 """
                 SELECT region_name, country_name, country_id, pollution, 
@@ -374,22 +412,22 @@ def load_regions_data() -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
             return regions_data, summary
             
     except Exception as e:
-        print(f"Błąd podczas ładowania danych o regionach z bazy: {e}")
+        print(f"Error loading region data from database: {e}")
         return [], {}
 
 
 def save_regions_data(regions_data: List[Dict[str, Any]], regions_summary: Dict[str, Any]) -> None:
     """
-    Zapisuje dane o regionach do bazy danych.
+    Saves region data to the database.
     
     Args:
-        regions_data: Lista regionów z bonusami
-        regions_summary: Podsumowanie danych o regionach
+        regions_data: List of regions with bonuses
+        regions_summary: Summary of region data
     """
     ts = datetime.utcnow().isoformat() + "Z"
     
     with _connect() as conn:
-        # Zapisz podsumowanie
+        # Save summary
         conn.execute(
             """
             INSERT INTO regions_summary(created_at, summary_json)
@@ -398,7 +436,7 @@ def save_regions_data(regions_data: List[Dict[str, Any]], regions_summary: Dict[
             (ts, json.dumps(regions_summary, ensure_ascii=False)),
         )
         
-        # Zapisz szczegółowe dane regionów
+        # Save detailed region data
         for region in regions_data:
             conn.execute(
                 """

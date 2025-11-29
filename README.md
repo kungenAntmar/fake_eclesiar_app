@@ -2,6 +2,15 @@
 
 Comprehensive application for analyzing data from the Eclesiar game, featuring daily reports, regional productivity analysis, currency arbitrage analysis, and interactive production calculators.
 
+## 🔐 Security Notice
+
+**IMPORTANT**: This application contains sensitive configuration data. Please read [SECURITY.md](SECURITY.md) before setting up the application.
+
+**Quick Setup:**
+1. Copy `env.example` to `.env` and fill in your API keys
+2. Never commit `.env` files or credential files to Git
+3. See [GOOGLE_SHEETS_SETUP.md](GOOGLE_SHEETS_SETUP.md) for Google Sheets integration
+
 ## 🏗️ Project Structure
 
 ```
@@ -98,7 +107,7 @@ nano .env
 
 #### Interactive Mode (Recommended)
 ```bash
-python main.py
+python3 main.py
 ```
 This launches the interactive menu where you can select from all available options.
 
@@ -106,43 +115,84 @@ This launches the interactive menu where you can select from all available optio
 
 ##### 1. Generate daily report
 ```bash
-python main.py daily-report
+python3 main.py daily-report
 ```
 
 ##### 2. Regional productivity analysis
 ```bash
-python main.py production-analysis
+python3 main.py production-analysis
 ```
 
 ##### 3. Currency arbitrage analysis
 ```bash
-python main.py arbitrage-analysis --min-profit 1.0
+python3 main.py arbitrage-analysis --min-profit 1.0
 ```
 
 ##### 4. Short economic report (DOCX)
 ```bash
-python main.py short-economic-report
+python3 main.py short-economic-report
 ```
 
 ##### 5. Full analysis (all modules)
 ```bash
-python main.py full-analysis
+python3 main.py full-analysis
 ```
 
 ##### 6. Interactive Production Calculator
 ```bash
-python main.py production-calculator
+python3 main.py production-calculator
 ```
 
 ##### 7. Quick Production Calculator (Test scenarios)
 ```bash
-python main.py quick-calculator
+python3 main.py quick-calculator
 ```
+
+##### 8. Google Sheets Report
+```bash
+python3 main.py google-sheets-report
+```
+
+## 🐳 Docker Setup (Automated Reports)
+
+For automated Google Sheets reports every 6 hours:
+
+### Quick Start with Docker
+```bash
+# 1. Copy environment template
+cp docker.env.template .env
+
+# 2. Edit .env with your credentials
+nano .env
+
+# 3. Place Google credentials in cred/ directory
+# cred/google_credentials.json
+
+# 4. Start automated reporting
+./start-docker.sh
+```
+
+### Docker Commands
+```bash
+# Start automated reports
+docker-compose up -d
+
+# View logs
+docker-compose logs -f eclesiar-scheduler
+
+# Stop reports
+docker-compose down
+
+# Manual report generation
+docker-compose exec eclesiar-scheduler python3 main.py google-sheets-report
+```
+
+See [docs/docker/DOCKER_QUICK_START.md](docs/docker/DOCKER_QUICK_START.md) for quick setup or [docs/docker/DOCKER_SETUP.md](docs/docker/DOCKER_SETUP.md) for detailed configuration.
 
 ### Additional options
 ```bash
-python main.py daily-report --output-dir custom_reports
-python main.py arbitrage-analysis --min-profit 2.0 --output-dir arbitrage_results
+python3 main.py daily-report --output-dir custom_reports
+python3 main.py arbitrage-analysis --min-profit 2.0 --output-dir arbitrage_results
 ```
 
 ## 🏛️ Architecture
@@ -220,10 +270,12 @@ The project follows **Clean Architecture** principles with clear separation of c
 - DOCX format generation
 
 ### 🏭 Regional Productivity Analysis
-- Production efficiency calculations
-- Regional and national bonuses consideration
+- Production efficiency calculations with all 8 production factors
+- **Regional bonuses** - Region-specific production bonuses
+- **Country bonuses** - Dynamic calculation based on regional bonuses within a country
 - Pollution and NPC wages analysis
 - Regional ranking by efficiency score
+- **Enhanced tables** - Separate columns for regional and country bonuses
 
 ### 💰 Currency Arbitrage Analysis
 - Arbitrage opportunity detection
@@ -238,6 +290,14 @@ The project follows **Clean Architecture** principles with clear separation of c
 - Best production region for each product
 - Compact DOCX format for quick reference
 
+### 🐳 Docker Automation
+- **Automated Scheduling** - Reports generated every 6 hours via cron
+- **Google Sheets Integration** - Direct upload to Google Sheets
+- **Container Health Monitoring** - Automatic restart and health checks
+- **Persistent Storage** - Data, logs, and reports preserved across restarts
+- **Easy Deployment** - One-command setup with docker-compose
+- **Production Ready** - Resource limits, logging, and error handling
+
 ### 🧮 Production Calculator
 - **Interactive Calculator**: Full-featured calculator with region selection, company parameters, and detailed analysis
 - **Quick Calculator**: Fast testing of different scenarios with predefined parameters
@@ -245,6 +305,7 @@ The project follows **Clean Architecture** principles with clear separation of c
 - **Parameter Configuration**: Company tier, eco skill, workers, building levels, military base, ownership type
 - **Efficiency Analysis**: Detailed scoring and recommendations for optimization
 - **Multiple Products**: Support for all production types (weapon, iron, grain, aircraft, etc.)
+- **Country Bonus Integration**: Automatic calculation and display of country bonuses in results
 
 ## ⚙️ Configuration
 
@@ -288,12 +349,14 @@ MIN_SPREAD_THRESHOLD=0.001
 ### Daily reports
 - **Location**: `reports/`
 - **Formats**: DOCX, HTML
-- **Naming**: `raport_dzienny_YYYY-MM-DD_HH-MM.docx`
+- **Naming**: `daily_report_YYYY-MM-DD_HH-MM.docx`
+- **Features**: Enhanced tables with regional and country bonus columns
 
 ### Productivity analysis
 - **Location**: `reports/`
 - **Formats**: TXT
 - **Naming**: `production_analysis_YYYYMMDD_HHMMSS.txt`
+- **Features**: Includes regional and country bonus analysis
 
 ### Arbitrage reports
 - **Location**: `reports/`
@@ -303,7 +366,8 @@ MIN_SPREAD_THRESHOLD=0.001
 ### Short economic reports
 - **Location**: `reports/`
 - **Formats**: DOCX
-- **Naming**: `skrocony_raport_ekonomiczny_YYYY-MM-DD_HH-MM.docx`
+- **Naming**: `short_economic_report_YYYY-MM-DD_HH-MM.docx`
+- **Features**: Enhanced tables with regional and country bonus columns
 
 ## 📚 Documentation
 
@@ -317,6 +381,10 @@ MIN_SPREAD_THRESHOLD=0.001
 - **Troubleshooting**: `docs/api/troubleshooting.md` - Common issues and solutions
 
 ### Development Documentation
+- **Database Schema**: `docs/development/database_schema.md` - Complete database schema documentation
+- **Database ERD**: `docs/development/database_erd.md` - Visual database relationships and diagrams
+- **Database Quick Ref**: `docs/development/database_quick_ref.md` - Essential commands and queries for developers
+- **Database Explorer**: `docs/development/database_setup.py` - Interactive script to explore database structure
 - **Refactoring Plan**: `docs/development/refactoring_plan.md` - Project refactoring roadmap
 - **Security**: `docs/development/security.md` - Security considerations
 - **Production Analysis**: `docs/development/production_analysis.md` - Production analysis details
@@ -337,6 +405,36 @@ The project follows a **Clean Architecture** pattern with clear separation of co
 - **`database/`** - Database models and SQLite operations
 - **`repositories/`** - Repository pattern implementations
 - **`storage/`** - Cache and data storage management
+
+### 🗄️ Database
+
+The application uses **SQLite** database for persistent storage:
+
+- **Database**: `data/eclesiar.db` (SQLite 3)
+- **Tables**: 10 tables for API cache, economic data, reports, and regions
+- **Features**: WAL mode, foreign keys, JSON fields
+- **Schema**: See detailed documentation in `docs/development/database_schema.md`
+
+#### **Main Tables:**
+- `api_snapshots` - Raw API responses cache
+- `item_prices` - Economic items price history (in GOLD)
+- `currency_rates` - Currency exchange rates vs GOLD
+- `historical_reports` - Daily reports archive
+- `raw_api_cache` - Latest complete API dataset
+- `regions_data` - Regional production bonuses and data
+- `regions_summary` - Aggregated regional statistics
+- `countries`, `currencies`, `regions` - Master data (Repository pattern)
+
+#### **Quick Start for Developers:**
+```bash
+# Explore database structure
+python3 docs/development/database_setup.py
+
+# View SQL schema  
+cat docs/development/database_schema.sql
+```
+
+**📚 Documentation**: `database_schema.md` | **⚡ Quick Ref**: `database_quick_ref.md` | **📊 ERD**: `database_erd.md`
 
 #### **Reports Layer (`src/reports/`)**
 - **`generators/`** - Report generation logic
@@ -426,6 +524,16 @@ mypy src/
 
 ## 📝 Changelog
 
+### v3.3 - Country Bonus & English Translation (2025-09-10) 🌍
+- ✅ **Country Bonus System** - Implemented dynamic country bonus calculation based on regional bonuses
+- ✅ **Enhanced Report Tables** - Added separate columns for regional and country bonuses in all reports
+- ✅ **Formula Implementation** - Country bonus = sum of regional bonuses of same type in country / 5
+- ✅ **Deduplication Logic** - Fixed duplicate region counting in country bonus calculations
+- ✅ **Complete English Translation** - Translated all user-facing text, error messages, and code comments
+- ✅ **Internationalization** - Application now fully supports English-speaking users
+- ✅ **Code Documentation** - All docstrings and comments translated to English
+- ✅ **User Interface** - All console menus, prompts, and output messages in English
+
 ### v3.2 - Open Source License (2025-01-09) 📄
 - ✅ **MIT License** - Released project under MIT License for open source community
 - ✅ **Copyright Attribution** - Updated all files with proper copyright attribution to Teo693
@@ -467,7 +575,7 @@ mypy src/
 - ✅ Implemented all 8 production factors from Eclesiar documentation
 - ✅ Added region selection with real-time data from API
 - ✅ Integrated calculators with main application menu
-- ✅ Added new commands: `python main.py production-calculator` and `python main.py quick-calculator`
+- ✅ Added new commands: `python3 main.py production-calculator` and `python3 main.py quick-calculator`
 - ✅ Created comprehensive calculator documentation (CALCULATOR_README.md)
 - ✅ Translated all application interfaces to English
 
@@ -477,7 +585,28 @@ mypy src/
 - ✅ Shows cheapest item of each type from all countries
 - ✅ Displays best production region for each product
 - ✅ Integrated with main application menu and CLI
-- ✅ Added new command: `python main.py short-economic-report`
+- ✅ Added new command: `python3 main.py short-economic-report`
+
+### v2.5 - Docker Automation & Google Sheets Integration (2025-09-12)
+- ✅ **Docker Containerization** - Complete Docker setup with automated scheduling
+- ✅ **Automated Reports** - Google Sheets reports generated every 6 hours via cron
+- ✅ **Docker Compose** - Easy deployment with docker-compose.yml configuration
+- ✅ **Volume Mounts** - Persistent data, logs, and reports storage
+- ✅ **Health Checks** - Container health monitoring and automatic restart
+- ✅ **Google Sheets CLI** - Added `google-sheets-report` command to main.py
+- ✅ **Production Ready** - Resource limits, logging, and error handling
+- ✅ **Easy Setup** - Automated startup scripts and comprehensive documentation
+- ✅ **Environment Templates** - Docker configuration templates and examples
+
+### v2.4 - Country Bonus Implementation & English Translation (2025-09-10)
+- ✅ **Country Bonus System** - Implemented dynamic country bonus calculation based on regional bonuses
+- ✅ **Enhanced Tables** - Added separate columns for regional and country bonuses in all reports
+- ✅ **Formula Implementation** - Country bonus = sum of regional bonuses of same type in country / 5
+- ✅ **Deduplication Logic** - Fixed duplicate region counting in country bonus calculations
+- ✅ **Complete English Translation** - Translated all user-facing text, error messages, and code comments
+- ✅ **Internationalization** - Application now fully supports English-speaking users
+- ✅ **Code Documentation** - All docstrings and comments translated to English
+- ✅ **User Interface** - All console menus, prompts, and output messages in English
 
 ### v2.1 - English Translation (2025-09-08)
 - ✅ Added NPC wages column to productivity table
@@ -499,6 +628,16 @@ mypy src/
 - Regional productivity analysis
 - Currency arbitrage analysis
 
+## 🌍 Internationalization
+
+The application is fully translated to English and supports international users:
+
+- **User Interface**: All menus, prompts, and messages in English
+- **Error Messages**: All error messages and warnings in English
+- **Code Documentation**: All docstrings and comments in English
+- **Reports**: All generated reports use English terminology
+- **Console Output**: All console output and logging in English
+
 ## 🤝 Support
 
 In case of problems or questions:
@@ -506,10 +645,15 @@ In case of problems or questions:
 2. Make sure all dependencies are installed
 3. Check API configuration in `.env` file
 4. Check write permissions in output directories
+5. All error messages are now in English for easier troubleshooting
 
 ## 📄 License
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+## 📋 Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes and new features.
 
 ### MIT License Summary
 
@@ -537,3 +681,5 @@ For major changes, please open an issue first to discuss what you would like to 
 - Built by Teo693 for the Eclesiar game community
 - Uses clean architecture principles and design patterns
 - Open source for the benefit of the gaming community
+- Fully internationalized for global accessibility
+- Enhanced with dynamic country bonus calculations

@@ -208,7 +208,6 @@ class DependencyContainer:
     def _initialize_services(self):
         """Initialize service instances"""
         from src.core.services.base_service import ServiceDependencies
-        from src.core.services.economy_service_refactored import EconomyService
         
         # Create service dependencies
         deps = ServiceDependencies(
@@ -232,6 +231,10 @@ class DependencyContainer:
         from src.core.strategies.data_fetching_strategy import (
             FullDataFetchingStrategy, OptimizedDataFetchingStrategy, CachedDataFetchingStrategy
         )
+        
+        # Ensure repositories are initialized first
+        if not self._repositories:
+            self._initialize_repositories()
         
         # Create service dependencies for strategies
         deps = ServiceDependencies(

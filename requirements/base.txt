@@ -6,8 +6,7 @@ python-dotenv>=0.19.0
 pandas>=1.5.0
 numpy>=1.21.0
 
-# Współbieżność
-concurrent-futures>=3.1.1
+# Współbieżność (concurrent.futures is built-in in Python 3.2+)
 
 # Eksport danych
 openpyxl>=3.0.10
@@ -31,6 +30,12 @@ configparser>=5.2.0
 # Testy (opcjonalnie)
 pytest>=7.0.0
 pytest-asyncio>=0.20.0
+
+# Google Sheets API
+google-api-python-client>=2.0.0
+google-auth>=2.0.0
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.1.0
 
 # Narzędzia deweloperskie (opcjonalnie)
 black>=22.0.0

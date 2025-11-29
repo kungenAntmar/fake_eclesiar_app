@@ -15,14 +15,42 @@ def _with_api_key(url: str) -> str:
     return f"{url}{sep}api_key={ECLESIAR_API_KEY}"
 
 
+def _load_cookies() -> Dict[str, str]:
+    """Load cookies from eclesiar_cookies.json as fallback for authentication"""
+    try:
+        cookies_file = "data/eclesiar_cookies.json"
+        if os.path.exists(cookies_file):
+            with open(cookies_file, 'r') as f:
+                cookies_data = json.load(f)
+                return cookies_data
+    except Exception as e:
+        print(f"Warning: Could not load cookies: {e}")
+    return {}
+
+
 def _headers() -> Dict[str, str]:
-    return {
-        "Authorization": f"Bearer {AUTH_TOKEN}",
+    headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
         "Accept-Encoding": "gzip, deflate",
         "Connection": "keep-alive",
     }
+    
+    # Try AUTH_TOKEN first
+    if AUTH_TOKEN:
+        headers["Authorization"] = f"Bearer {AUTH_TOKEN}"
+    else:
+        # Fallback to cookies
+        cookies = _load_cookies()
+        if cookies:
+            # Convert cookies to Cookie header format
+            cookie_string = "; ".join([f"{key}={value}" for key, value in cookies.items()])
+            headers["Cookie"] = cookie_string
+            print("Using cookies for authentication (AUTH_TOKEN not available)")
+        else:
+            print("Warning: No AUTH_TOKEN and no cookies available for authentication")
+    
+    return headers
 
 
 # Globalna sesja HTTP z retry i keep-alive
@@ -68,7 +96,7 @@ def fetch_data(endpoint: str, description: str, params: Optional[Dict[str, Any]]
             print(f"Endpoint {endpoint} nie istnieje (404) - {description}")
             return None
         elif response.status_code >= 400:
-            print(f"Błąd HTTP {response.status_code} dla {endpoint}: {description}")
+            print(f"HTTP error {response.status_code} for {endpoint}: {description}")
             response.raise_for_status()
         
         data = response.json()

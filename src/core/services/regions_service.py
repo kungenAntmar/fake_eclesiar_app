@@ -25,31 +25,27 @@ def fetch_regions_for_country(country_id: int) -> List[Dict[str, Any]]:
             return response.get("data", [])
         return []
     except Exception as e:
-        print(f"Błąd podczas pobierania regionów dla kraju {country_id}: {e}")
+        print(f"Error fetching regions for country {country_id}: {e}")
         return []
 
 
 def fetch_all_regions_with_bonuses(eco_countries: Dict[int, Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Pobiera wszystkie regiony ze wszystkich krajów i filtruje tylko te z bonusami.
+    Pobiera wszystkie regiony ze wszystkich krajów (nie tylko z bonusami).
     
     Args:
         eco_countries: Słownik z informacjami o krajach
         
     Returns:
-        Lista regionów z bonusami
+        Lista wszystkich regionów
     """
-    regions_with_bonuses = []
+    all_regions = []
     max_workers = int(os.getenv("API_WORKERS_REGIONS", "8"))
     
     def fetch_country_regions(country_id: int) -> List[Dict[str, Any]]:
         regions = fetch_regions_for_country(country_id)
-        # Filtruj tylko regiony z bonusami
-        regions_with_bonus = []
-        for region in regions:
-            if region.get("bonus") and len(region["bonus"]) > 0:
-                regions_with_bonus.append(region)
-        return regions_with_bonus
+        # Zwróć wszystkie regiony (nie tylko z bonusami)
+        return regions
     
     # Parallel fetching of regions for all countries
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -58,12 +54,12 @@ def fetch_all_regions_with_bonuses(eco_countries: Dict[int, Dict[str, Any]]) -> 
         for future in as_completed(futures):
             try:
                 country_regions = future.result()
-                regions_with_bonuses.extend(country_regions)
+                all_regions.extend(country_regions)
             except Exception as e:
                 country_id = futures[future]
-                print(f"Błąd podczas pobierania regionów dla kraju {country_id}: {e}")
+                print(f"Error fetching regions for country {country_id}: {e}")
     
-    return regions_with_bonuses
+    return all_regions
 
 
 def process_regions_data(regions: List[Dict[str, Any]], eco_countries: Dict[int, Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -83,10 +79,12 @@ def process_regions_data(regions: List[Dict[str, Any]], eco_countries: Dict[int,
         country_id = region.get("country_id")
         original_country_id = region.get("original_country_id")
         
-        # Pobierz nazwę kraju
+        # Pobierz nazwę kraju - spróbuj najpierw country_id, potem original_country_id
         country_name = "Unknown"
-        if country_id in eco_countries:
+        if country_id and country_id in eco_countries:
             country_name = eco_countries[country_id].get("name", "Unknown")
+        elif original_country_id and original_country_id in eco_countries:
+            country_name = eco_countries[original_country_id].get("name", "Unknown")
         
         # Oblicz bonus_score (suma wszystkich bonusów) i przechowuj bonusy według typów
         bonus_score = 0
@@ -100,6 +98,17 @@ def process_regions_data(regions: List[Dict[str, Any]], eco_countries: Dict[int,
                 bonus_score += bonus_value
                 bonus_parts.append(f"{bonus_type}:{bonus_value}")
                 bonus_by_type[bonus_type] = bonus_value  # Przechowuj bonus według typu
+                
+                # ✅ DEBUG: Log oil/fuel bonus types from API
+                if bonus_type.upper() in ['OIL', 'FUEL', 'PALIWO']:
+                    region_name = region.get("region_name", region.get("name", "Unknown"))
+                    print(f"🔍 DEBUG: Found {bonus_type} bonus in region {region_name}: {bonus_value}%")
+                
+                # ✅ DEBUG: Log all bonus types for first few regions to understand API format
+                if len(processed_regions) < 5:  # Only for first 5 regions
+                    region_name = region.get("region_name", region.get("name", "Unknown"))
+                    print(f"🔍 DEBUG: Region {region_name} has bonus type: {bonus_type} = {bonus_value}%")
+            
             bonus_description = " ".join(bonus_parts)
         
         # Oblicz bonus_per_pollution
@@ -107,7 +116,7 @@ def process_regions_data(regions: List[Dict[str, Any]], eco_countries: Dict[int,
         bonus_per_pollution = round(bonus_score / pollution, 2) if pollution > 0 else 0
         
         processed_region = {
-            "region_name": region.get("name", "Unknown"),
+            "region_name": region.get("region_name", region.get("name", "Unknown")),
             "country_name": country_name,
             "country_id": country_id,
             "pollution": pollution,
@@ -118,7 +127,9 @@ def process_regions_data(regions: List[Dict[str, Any]], eco_countries: Dict[int,
             "nb_npcs": region.get("nb_npcs", 0),
             "type": region.get("type", 0),
             "original_country_id": original_country_id,
-            "bonus_per_pollution": bonus_per_pollution
+            "bonus_per_pollution": bonus_per_pollution,
+            "factories": region.get("factories", {}),  # Zachowaj informacje o fabrykach
+            "bonus": region.get("bonus", [])  # Zachowaj oryginalne bonusy
         }
         
         processed_regions.append(processed_region)
@@ -173,16 +184,16 @@ def fetch_and_process_regions(eco_countries: Dict[int, Dict[str, Any]]) -> Tuple
     Returns:
         Krotka (lista regionów, podsumowanie)
     """
-    print("Fetching region data with bonuses...")
+    print("Fetching all region data...")
     
-    # Pobierz wszystkie regiony z bonusami
+    # Pobierz wszystkie regiony
     regions = fetch_all_regions_with_bonuses(eco_countries)
     
     if not regions:
-        print("Nie znaleziono regionów z bonusami.")
+        print("No regions found.")
         return [], {}
     
-    print(f"Znaleziono {len(regions)} regionów z bonusami.")
+    print(f"Found {len(regions)} regions.")
     
     # Przetwórz dane
     processed_regions = process_regions_data(regions, eco_countries)
